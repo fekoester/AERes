@@ -39,19 +39,20 @@ print(f'Ridge Regression MSE for testing: {loss.item()}')
 #Calculate attention model error
 trainer.evaluate(reservoir.states_stand, Y_test)
 
-for i in range(300):
+N=250
+for i in range(N):
     reservoir.one_step(X_test[i], standardize=True)
 
-input = X_test[300]
+input = X_test[N]
 prediction = []
-for i in range(300):
+for i in range(N):
     reservoir.one_step(input, standardize=True)
     pred_test = trainer.predict(reservoir.state_stand.reshape(1, -1)).T.squeeze()
     prediction.append(pred_test)
     input = pred_test
 
 plt.plot(np.array(prediction)[:,0])
-plt.plot(Y_test[300:,0])
+plt.plot(Y_test[N:,0])
 plt.show()
 
 
