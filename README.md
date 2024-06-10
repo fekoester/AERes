@@ -2,6 +2,7 @@
 
 ## Overview
 AERes is a Python package for experimenting with the attention-enhanced reservoir architecture using PyTorch. This library includes modules to simulate dynamical systems like the Lorenz attractor, implement reservoir computing models, and apply linear attention mechanisms.
+The corresponding paper can be found here: `https://arxiv.org/abs/2312.16503`
 
 ## Installation
 You can install AERes using pip:
