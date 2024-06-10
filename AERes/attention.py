@@ -57,7 +57,7 @@ class LinearAttention(nn.Module):
 
 class DeepLinearAttention(nn.Module):
     """
-    A PyTorch module for applying a linear attention mechanism with an additional deep nonlinear layer.
+    A PyTorch module for applying a nonlinear attention mechanism.
     """
     def __init__(self, input_dim, target_dim, device=None):
         """
@@ -239,6 +239,14 @@ class LinearAttentionTrainer:
         """
         print(torch.cuda.memory_summary(device=None, abbreviated=False))
 
+    def predict(self, input):
+        """
+        Takes an input and makes a prediction on it.
+        """
+        self.model.to(self.device)
+        input_tensor = torch.tensor(input, dtype=torch.float32)
+        input_tensor.to(self.device)
+        return self.model(input_tensor).detach().numpy()
 
     def save_model(self, filepath):
         """

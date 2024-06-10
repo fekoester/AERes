@@ -28,8 +28,8 @@ class LorenzSimulator:
             "initial_state": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             "params": (10.0, 28.0, 8/3, 0.5),
             "transient_time": 10,
-            "total_time": 1000,
-            "num_points": 25000,
+            "total_time": 2500,
+            "num_points": 30000,
             "function_name": function_name,
             "lorenz96_params": {
                 "initial_state": np.random.rand(36).tolist(),
@@ -127,6 +127,11 @@ class LorenzSimulator:
             states_sample = solution.sol(np.linspace(config["transient_time"], config["transient_time"] + config["total_time"], config["num_points"]))
         else:
             raise ValueError(f"Unknown function name: {function_name}")
+        
+        # Adding noise to the states sample
+        noise_level = config.get("noise_level", 0.01)  # Adjust noise level as needed
+        noise = np.random.normal(scale=noise_level, size=states_sample.shape)
+        noisy_states_sample = states_sample + noise
 
         self.states_data = self.standardize_data(states_sample.T)
 
