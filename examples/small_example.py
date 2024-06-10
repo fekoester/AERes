@@ -4,6 +4,7 @@ from AERes.reservoir import Reservoir
 from AERes.attention import LinearAttentionTrainer
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 #Simulate a Lorenz as a basic example for a chaotic dynamical system
 lorenz_simulator = LorenzSimulator(function_name='lorenz_coupled')
@@ -14,11 +15,11 @@ reservoir = Reservoir(X_train, number_nodes=50, input_dimension=X_train.shape[1]
 
 # Train a simple Ridge Regression Model for comparison
 ridge_model = Ridge(alpha=1.0)
-ridge_model.fit(reservoir.states, Y_train)
-ridge_predictions = ridge_model.predict(reservoir.states)
+ridge_model.fit(reservoir.states_stand, Y_train)
+ridge_predictions = ridge_model.predict(reservoir.states_stand)
 
 # Create a linear attention model
-trainer = LinearAttentionTrainer(reservoir.states, Y_train, layer_type="linear")
+trainer = LinearAttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
 
 #Check the training and testing error for the ridge regression with the implemented attention model error function
 loss = trainer.MSELoss(ridge_predictions, Y_train)
@@ -29,20 +30,34 @@ trainer.train(epochs=100)
 reservoir.run_given_inputs(X_test, calc_standardize=False)
 
 #Predict the testing inputs with the ridge regression model
-ridge_predictions = ridge_model.predict(reservoir.states)
+ridge_predictions = ridge_model.predict(reservoir.states_stand)
 
 #Calculate ridge regression error
 loss = trainer.MSELoss(ridge_predictions, Y_test)
 print(f'Ridge Regression MSE for testing: {loss.item()}')
 
 #Calculate attention model error
-trainer.evaluate(reservoir.states, Y_test)
+trainer.evaluate(reservoir.states_stand, Y_test)
+
+for i in range(300):
+    reservoir.one_step(X_test[i], standardize=True)
+
+input = X_test[300]
+prediction = []
+for i in range(300):
+    reservoir.one_step(input, standardize=True)
+    pred_test = trainer.predict(reservoir.state_stand.reshape(1, -1)).T.squeeze()
+    prediction.append(pred_test)
+    input = pred_test
+
+plt.plot(np.array(prediction)[:,0])
+plt.plot(Y_test[300:,0])
+plt.show()
+
 
 #Get the next step prediction for the testing set
-pred_test = trainer.predict(reservoir.states)
-plt.plot(Y_test[:,0])
-plt.plot(pred_test[:,0])
-plt.show()
+pred_test = trainer.predict(reservoir.states_stand)
+
 
 
 #We can save and load the trained model under a specified path

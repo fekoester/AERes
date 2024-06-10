@@ -91,7 +91,7 @@ class Reservoir:
         scale = np.sqrt(1.0 / (self.input_dimension * self.node_input_degree))
         self.input_weights = np.where(connect_mask, self.rng.normal(0, scale, (self.number_nodes, self.input_dimension)), 0)
 
-    def one_step(self, inputs):
+    def one_step(self, inputs, standardize=False):
         """
         Advances the reservoir's state by one time step using the current state, input data, and reservoir matrices.
         
@@ -104,6 +104,10 @@ class Reservoir:
         input_term = self.input_weights @ inputs
         state_term = self.adjacency_weight_matrix @ self.state
         self.state = np.tanh(state_term + input_term + self.biases)
+
+        if standardize:
+            self.reapply_standardize()
+
         return self.state
 
     def run_given_inputs(self, inputs, calc_standardize=True):
@@ -136,7 +140,7 @@ class Reservoir:
         # To avoid division by zero, replace zero standard deviations with 1
         self.col_stds[self.col_stds == 0] = 1
 
-        self.states = (self.states - self.col_means) / self.col_stds
+        self.states_stand = (self.states - self.col_means) / self.col_stds
 
     def reapply_standardize(self):
         """
@@ -149,4 +153,5 @@ class Reservoir:
             raise ValueError("No states available to reapply standardization.")
         
         # Reapply the mean and standard deviation adjustments
-        self.states = (self.states - self.col_means) / self.col_stds
+        self.states_stand = (self.states - self.col_means) / self.col_stds
+        self.state_stand = (self.state - self.col_means) / self.col_stds
