@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 #Simulate a Lorenz as a basic example for a chaotic dynamical system
-lorenz_simulator = LorenzSimulator(function_name='lorenz_coupled')
+lorenz_simulator = LorenzSimulator(function_name='lorenz')
 X_train, Y_train, X_test, Y_test = lorenz_simulator.simulate_lorenz()
 
 # Create an instance of the Reservoir, feed it the input and run it

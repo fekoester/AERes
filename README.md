@@ -16,21 +16,23 @@ This guide will help you get started with the `AERes` library, demonstrating how
 
 ### Simulating a Dynamical System
 
-Begin by simulating a coupled Lorenz system, which is a common example of a chaotic dynamical system.
+Simulate the standard Lorenz system, a well-known example of a chaotic dynamical system, to generate synthetic time-series data.
 
 ```python
 from AERes.dynamicalSystems import LorenzSimulator
 
 # Initialize the Lorenz simulator with the 'lorenz_coupled' configuration
-lorenz_simulator = LorenzSimulator(function_name='lorenz_coupled')
+lorenz_simulator = LorenzSimulator(function_name='lorenz')
 
 # Perform the simulation and retrieve the data split into training and testing sets
 X_train, Y_train, X_test, Y_test = lorenz_simulator.simulate_lorenz()
 ```
 
+Here, `LorenzSimulator` is used to create a Lorenz system simulation with a specified system configuration, generating training and testing datasets.
+
 ### Simulating a Reservoir
 
-Process the simulated data through a reservoir computing system to enhance its features for further analysis.
+Process the simulated data through a reservoir computing system.
 
 ```python
 from AERes.reservoir import Reservoir
@@ -39,9 +41,12 @@ from AERes.reservoir import Reservoir
 reservoir = Reservoir(X_train, number_nodes=50, input_dimension=X_train.shape[1], seed=1, standardize=True)
 ```
 
+`Reservoir` processes the input data through a fixed, random recurrent structure of tanh functions. 
+The parameters such as `number_nodes`, `input_dimension`, and `standardize` control the complexity, dimensions, and state normalization, respectively.
+
 ### Training a Ridge Regression Model
 
-Utilize a simple linear model for a baseline comparison.
+Use a simple linear model, Ridge Regression, to establish a baseline for comparison with more complex models.
 
 ```python
 from sklearn.linear_model import Ridge
@@ -54,9 +59,11 @@ ridge_model.fit(reservoir.states_stand, Y_train)
 ridge_predictions = ridge_model.predict(reservoir.states_stand)
 ```
 
+The Ridge Regression model helps in understanding the basic performance on the dataset, using `alpha` for regularization strength.
+
 ### Implementing the Linear Attention Model
 
-Set up and train a linear attention model to focus on important features dynamically.
+Implement a linear attention model that dynamically focuses on the most important features of the input data.
 
 ```python
 from AERes.attention import LinearAttentionTrainer
@@ -68,9 +75,11 @@ trainer = LinearAttentionTrainer(reservoir.states_stand, Y_train, layer_type="li
 trainer.train(epochs=100)
 ```
 
+`LinearAttentionTrainer` sets up the model training process, handling both the training iterations and the data loading.
+
 ### Evaluating the Model
 
-Evaluate the performance of both models to understand their effectiveness.
+Compare the performance of the Ridge Regression and Linear Attention models to understand their effectiveness.
 
 ```python
 # Calculate the Mean Squared Error (MSE) for the Ridge Regression model
@@ -80,6 +89,8 @@ print(f'Ridge Regression MSE for training: {ridge_loss.item()}')
 # Evaluate the trained attention model on the testing data
 trainer.evaluate(reservoir.states_stand, Y_test)
 ```
+
+The evaluation phase involves calculating the Mean Squared Error (MSE) for both models to quantify their accuracy.
 
 We can also make predictions on some given input and plot its outcome.
 
