@@ -36,7 +36,7 @@ Process the simulated data through a reservoir computing system to enhance its f
 from AERes.reservoir import Reservoir
 
 # Create an instance of the Reservoir with specified parameters
-reservoir = Reservoir(X_train, number_nodes=10, input_dimension=X_train.shape[1], seed=1, standardize=True)
+reservoir = Reservoir(X_train, number_nodes=50, input_dimension=X_train.shape[1], seed=1, standardize=True)
 ```
 
 ### Training a Ridge Regression Model
@@ -68,7 +68,7 @@ trainer = LinearAttentionTrainer(reservoir.states, Y_train, layer_type="linear")
 trainer.train(epochs=100)
 ```
 
-### Evaluating the Models
+### Evaluating the Model
 
 Evaluate the performance of both models to understand their effectiveness.
 
@@ -79,4 +79,25 @@ print(f'Ridge Regression MSE for training: {ridge_loss.item()}')
 
 # Evaluate the trained attention model on the testing data
 trainer.evaluate(reservoir.states, Y_test)
+```
+
+We can also make predictions on some given input and plot its outcome.
+
+```python
+import matplotlib.pyplot as plt
+#Get the next step prediction for the testing set and plot it
+pred_test = trainer.predict(reservoir.states)
+plt.plot(Y_test[:,0])
+plt.plot(pred_test[:,0])
+plt.show()
+```
+
+### Save the Model
+
+To save time and computation, we can save the parameters of our model and load them for later use.
+
+```python
+#We can save and load the trained model under a specified path
+trainer.save_model('path_to_model.pt')
+trainer.load_model('path_to_model.pt')
 ```
