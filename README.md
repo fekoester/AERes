@@ -8,7 +8,7 @@ You can install AERes using pip:
 
 ```bash
 pip install aeres
-
+```
 
 ## Quick Start
 
