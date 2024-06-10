@@ -135,3 +135,7 @@ To save time and computation, we can save the parameters of our model and load t
 trainer.save_model('path_to_model.pt')
 trainer.load_model('path_to_model.pt')
 ```
+
+## Higher Complexity yields more performance improvement
+
+The above example showcases the usage of the library. The classic Lorenz system is a very easy task, therefore the performance difference between the classic ridge regression approach and the linear attention is not very big. Using systems with higher complexity or more diverse time series data will enable the advantages of the linear attention approach. With time I will more examples here to show that.
