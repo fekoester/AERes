@@ -128,12 +128,12 @@ class LorenzSimulator:
         else:
             raise ValueError(f"Unknown function name: {function_name}")
         
-        # Adding noise to the states sample
+        # Adding some noise to the states sample
         noise_level = config.get("noise_level", 0.01)  # Adjust noise level as needed
         noise = np.random.normal(scale=noise_level, size=states_sample.shape)
         noisy_states_sample = states_sample + noise
 
-        self.states_data = self.standardize_data(states_sample.T)
+        self.states_data = self.standardize_data(noisy_states_sample.T)
 
     def standardize_data(self, data):
         """

@@ -103,7 +103,7 @@ class DeepLinearAttention(nn.Module):
 
         return outputs
 
-class LinearAttentionTrainer:
+class AttentionTrainer:
     """
     Trainer class for the LinearAttention model, encapsulating training and evaluation logic,
     including automatic DataLoader creation from provided datasets.
@@ -130,7 +130,6 @@ class LinearAttentionTrainer:
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.batch_size = batch_size
         self.train_loader = self.create_dataloader(X, Y, batch_size, shuffle)
-        self.scaler = GradScaler()
         self.mse_loss = nn.MSELoss()
         #self.writer = SummaryWriter(log_dir='./logs')  # Initialize the SummaryWriter
 
@@ -152,9 +151,8 @@ class LinearAttentionTrainer:
         if not isinstance(target, torch.Tensor):
             target = torch.tensor(target, dtype=torch.float32)
         return self.mse_loss(prediction, target)
-
-
-    def create_dataloader(self, X, Y, batch_size, shuffle=False):
+    
+    def create_dataloader(self, X, Y, batch_size, shuffle=True):
         """
         Helper method to create a DataLoader from numpy arrays.
 
@@ -167,12 +165,11 @@ class LinearAttentionTrainer:
         Returns:
         - DataLoader: Configured DataLoader ready for model training or evaluation.
         """
-        X_tensor = torch.tensor(X, dtype=torch.float32)
-        Y_tensor = torch.tensor(Y, dtype=torch.float32)
-        dataset = TensorDataset(X_tensor, Y_tensor)
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=8, pin_memory=True, persistent_workers=True)
-    
-
+        dataset = TensorDataset(torch.tensor(X, dtype=torch.float32),
+                                torch.tensor(Y, dtype=torch.float32))
+        num_workers = 8 if torch.cuda.is_available() else 0
+        pin_memory = torch.cuda.is_available()
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,num_workers=0, pin_memory=pin_memory)
 
     def train(self, epochs=100):
         """
@@ -181,36 +178,34 @@ class LinearAttentionTrainer:
         Args:
             epochs (int): The number of epochs to train the model.
         """
-        self.model.train()
-        self.model.to(self.device)
-      
+        if torch.cuda.is_available():
+            scaler = GradScaler()
+
         for epoch in range(epochs):
+            self.model.train()
             epoch_loss = 0.0
             for batch_idx, (X_batch, Y_batch) in enumerate(self.train_loader):
                 X_batch, Y_batch = X_batch.to(self.device), Y_batch.to(self.device)
                 self.optimizer.zero_grad()
 
-                if self.device.type == 'cuda':
+                if torch.cuda.is_available():
                     with autocast():
-                        outputs = self.model(X_batch)
-                        loss = self.MSELoss(outputs, Y_batch)
+                        predictions = self.model(X_batch)
+                        loss = self.MSELoss(predictions, Y_batch)
+                    scaler.scale(loss).backward()
+                    scaler.step(self.optimizer)
+                    scaler.update()
                 else:
-                    outputs = self.model(X_batch)
-                    loss = self.MSELoss(outputs, Y_batch)
-
-                if self.device.type == 'cuda':
-                    self.scaler.scale(loss).backward()
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
+                    predictions = self.model(X_batch)
+                    loss = self.MSELoss(predictions, Y_batch)
                     loss.backward()
                     self.optimizer.step()
+                
 
                 epoch_loss += loss.item()
 
-            avg_loss = epoch_loss / len(self.train_loader)
-            if epoch % 20 == 0:
-                print(f'Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}')
+            print(f"Epoch {epoch + 1}/{epochs}, Loss: {epoch_loss / len(self.train_loader):.4f}")
+
 
 
     def evaluate(self, X, Y):
