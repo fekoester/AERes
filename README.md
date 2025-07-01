@@ -87,6 +87,9 @@ Compare the performance of the Ridge Regression and Linear Attention models to u
 ridge_loss = trainer.MSELoss(ridge_predictions, Y_train)
 print(f'Ridge Regression MSE for training: {ridge_loss.item()}')
 
+# We have to run the reservoir again, this time with the test inputs
+reservoir.run_given_inputs(X_test)
+
 # Evaluate the trained attention model on the testing data
 trainer.evaluate(reservoir.states_stand, Y_test)
 ```
