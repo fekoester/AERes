@@ -67,16 +67,16 @@ The Ridge Regression model helps in understanding the basic performance on the d
 Implement a linear attention model that dynamically focuses on the most important features of the input data.
 
 ```python
-from AERes.attention import LinearAttentionTrainer
+from AERes.attention import AttentionTrainer
 
 # Initialize the trainer for the Linear Attention model with the standardized reservoir states
-trainer = LinearAttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
+trainer = AttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
 
 # Train the model over 100 epochs
 trainer.train(epochs=100)
 ```
 
-`LinearAttentionTrainer` sets up the model training process, handling both the training iterations and the data loading.
+`AttentionTrainer` sets up the model training process, handling both the training iterations and the data loading.
 
 ### Evaluating the Model
 
