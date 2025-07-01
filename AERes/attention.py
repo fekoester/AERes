@@ -239,9 +239,8 @@ class AttentionTrainer:
         Takes an input and makes a prediction on it.
         """
         self.model.to(self.device)
-        input_tensor = torch.tensor(input, dtype=torch.float32)
-        input_tensor = input_tensor.to(self.device)
-        return self.model(input_tensor).detach().numpy()
+        input_tensor = torch.tensor(input, dtype=torch.float32).to(self.device)
+        return self.model(input_tensor).detach().cpu().numpy()
 
     def save_model(self, filepath):
         """
