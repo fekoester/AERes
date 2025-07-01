@@ -8,7 +8,7 @@ The corresponding paper can be found here:(https://arxiv.org/abs/2312.16503)
 You can install AERes using pip:
 
 ```bash
-pip install aeres
+pip install git+https://github.com/fekoester/AERes.git
 ```
 
 ## Quick Start
