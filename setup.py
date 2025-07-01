@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='AERes',
-    version='0.1.3',
+    version='0.1.4',
     author='Felix Köster',
     author_email='felixk@mail.saitama-u.ac.jp',
     packages=find_packages(),
