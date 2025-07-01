@@ -240,7 +240,7 @@ class AttentionTrainer:
         """
         self.model.to(self.device)
         input_tensor = torch.tensor(input, dtype=torch.float32)
-        input_tensor.to(self.device)
+        input_tensor = input_tensor.to(self.device)
         return self.model(input_tensor).detach().numpy()
 
     def save_model(self, filepath):
