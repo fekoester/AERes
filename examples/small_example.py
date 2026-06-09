@@ -1,7 +1,7 @@
 from sklearn.linear_model import Ridge
 from AERes.dynamicalSystems import LorenzSimulator
 from AERes.reservoir import Reservoir
-from AERes.attention import LinearAttentionTrainer
+from AERes.attention import AttentionTrainer
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,7 +19,7 @@ ridge_model.fit(reservoir.states_stand, Y_train)
 ridge_predictions = ridge_model.predict(reservoir.states_stand)
 
 # Create a linear attention model
-trainer = LinearAttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
+trainer = AttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
 
 #Check the training and testing error for the ridge regression with the implemented attention model error function
 loss = trainer.MSELoss(ridge_predictions, Y_train)

@@ -78,6 +78,40 @@ trainer.train(epochs=100)
 
 `AttentionTrainer` sets up the model training process, handling both the training iterations and the data loading.
 
+### Implementing Node-Trajectory Attention
+
+For a more faithful self-attention formulation, each reservoir node can be treated as a token whose features are its
+recent state trajectory. A rolling window over the reservoir state sequence creates tensors with shape
+`(samples, number_nodes, window_size)`, and self-attention learns interactions between node trajectories.
+
+```python
+from AERes.attention import NodeTrajectoryAttentionTrainer
+
+window_size = 32
+trainer = NodeTrajectoryAttentionTrainer(
+    reservoir.states_stand,
+    Y_train,
+    window_size=window_size,
+    d_model=64,
+    nhead=4,
+    pooling="mean",
+)
+
+trainer.train(epochs=100)
+```
+
+The available pooling modes are `"mean"`, `"max"`, `"flatten"`, `"attention"`, and `"cls"`.
+
+You can compare the classic ridge readout, the original AER attention layer, and node-trajectory attention across
+reservoir sizes with:
+
+```bash
+python examples/compare_reservoir_attention.py
+```
+
+This writes `mse_over_reservoir_size.png` and `mse_over_parameter_count.png` to
+`plots/reservoir_attention_comparison/`.
+
 ### Evaluating the Model
 
 Compare the performance of the Ridge Regression and Linear Attention models to understand their effectiveness.
