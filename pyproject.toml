@@ -9,7 +9,7 @@ description = "Attention-enhanced reservoir computing in PyTorch: reservoirs, at
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Felix Köster", email = "felixk@mail.saitama-u.ac.jp" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = ["numpy>=1.21", "scipy>=1.7", "torch>=2.0"]
 keywords = ["reservoir computing", "echo state network", "attention", "time series", "chaos"]
 classifiers = [

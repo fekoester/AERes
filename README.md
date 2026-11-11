@@ -26,7 +26,7 @@ pip install git+https://github.com/fekoester/AERes.git
 pip install "AERes[examples] @ git+https://github.com/fekoester/AERes.git"
 ```
 
-AERes needs Python ≥ 3.9 and PyTorch ≥ 2.0. It uses a GPU automatically if one is available.
+AERes needs Python ≥ 3.10 and PyTorch ≥ 2.0. It uses a GPU automatically if one is available.
 
 ## Quick start
 
