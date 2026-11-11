@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "AERes"
+dynamic = ["version"]
+description = "Attention-enhanced reservoir computing in PyTorch: reservoirs, attention readouts and chaotic benchmark systems."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Felix Köster", email = "felixk@mail.saitama-u.ac.jp" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.21", "scipy>=1.7", "torch>=2.0"]
+keywords = ["reservoir computing", "echo state network", "attention", "time series", "chaos"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+examples = ["matplotlib>=3.3", "scikit-learn>=1.0"]
+dev = ["pytest>=7", "scikit-learn>=1.0"]
+
+[project.urls]
+Homepage = "https://github.com/fekoester/AERes"
+Paper = "https://arxiv.org/abs/2312.16503"
+"Bug Tracker" = "https://github.com/fekoester/AERes/issues"
+
+[tool.setuptools]
+packages = ["AERes"]
+
+[tool.setuptools.dynamic]
+version = { attr = "AERes.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

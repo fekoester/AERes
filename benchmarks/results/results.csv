@@ -1,0 +1,100 @@
+system,nodes,seed,readout,parameters,nrmse,vpt_lyapunov,train_seconds
+lorenz,25,0,ridge,803,0.0593388,0.4168,0.0
+lorenz,25,0,attention (AER),2675,0.0121307,1.006,11.1
+lorenz,25,0,node-trajectory attention,14872,0.0278929,0.8517,12.4
+lorenz,25,1,ridge,803,0.0588754,0.3353,0.0
+lorenz,25,1,attention (AER),2675,0.0105466,2.021,10.0
+lorenz,25,1,node-trajectory attention,14872,0.0237377,0.6162,12.0
+lorenz,25,2,ridge,803,0.0509366,0.6433,0.0
+lorenz,25,2,attention (AER),2675,0.0128873,1.549,10.1
+lorenz,25,2,node-trajectory attention,14872,0.0440444,0.6705,12.3
+lorenz,50,0,ridge,2853,0.0186069,1.169,0.0
+lorenz,50,0,attention (AER),10350,0.00661321,2.003,12.1
+lorenz,50,0,node-trajectory attention,17647,0.0323567,1.278,20.5
+lorenz,50,1,ridge,2853,0.0200432,0.4802,0.0
+lorenz,50,1,attention (AER),10350,0.00897981,2.329,12.2
+lorenz,50,1,node-trajectory attention,17647,0.0362163,0.8517,19.5
+lorenz,50,2,ridge,2853,0.0113749,1.577,0.0
+lorenz,50,2,attention (AER),10350,0.00648707,2.682,11.4
+lorenz,50,2,node-trajectory attention,17647,0.0311927,1.269,20.2
+lorenz,100,0,ridge,10703,0.00485713,1.468,0.0
+lorenz,100,0,attention (AER),40700,0.00702402,1.767,14.8
+lorenz,100,0,node-trajectory attention,26947,0.0206219,1.033,41.4
+lorenz,100,1,ridge,10703,0.00676539,1.713,0.0
+lorenz,100,1,attention (AER),40700,0.00692208,2.075,14.9
+lorenz,100,1,node-trajectory attention,26947,0.0293121,1.241,41.4
+lorenz,100,2,ridge,10703,0.00649757,1.395,0.0
+lorenz,100,2,attention (AER),40700,0.0133388,1.35,14.4
+lorenz,100,2,node-trajectory attention,26947,0.0293984,0.9424,40.9
+lorenz,200,0,ridge,41403,0.00255377,2.501,0.1
+lorenz,200,0,attention (AER),161400,0.0218081,1.096,19.8
+lorenz,200,1,ridge,41403,0.00277189,2.791,0.1
+lorenz,200,1,attention (AER),161400,0.00818872,2.564,19.7
+lorenz,200,2,ridge,41403,0.00261135,3.316,0.1
+lorenz,200,2,attention (AER),161400,0.0237443,1.314,20.1
+rossler,25,0,ridge,803,0.0469501,0.02499,0.0
+rossler,25,0,attention (AER),2675,0.017338,0.2678,10.0
+rossler,25,0,node-trajectory attention,14872,0.0313631,0.2849,12.1
+rossler,25,1,ridge,803,0.0639617,0.01642,0.0
+rossler,25,1,attention (AER),2675,0.0139727,0.2149,10.2
+rossler,25,1,node-trajectory attention,14872,0.0236533,0.2135,12.2
+rossler,25,2,ridge,803,0.0539108,0.01642,0.0
+rossler,25,2,attention (AER),2675,0.0202747,0.1942,10.6
+rossler,25,2,node-trajectory attention,14872,0.0257954,0.2685,12.0
+rossler,50,0,ridge,2853,0.0159237,0.08426,0.0
+rossler,50,0,attention (AER),10350,0.00697362,0.2449,11.8
+rossler,50,0,node-trajectory attention,17647,0.0218531,0.5613,19.3
+rossler,50,1,ridge,2853,0.041403,0.03785,0.0
+rossler,50,1,attention (AER),10350,0.0142672,0.437,11.5
+rossler,50,1,node-trajectory attention,17647,0.0392497,0.517,19.6
+rossler,50,2,ridge,2853,0.0259745,0.02999,0.0
+rossler,50,2,attention (AER),10350,0.0116042,0.2635,11.8
+rossler,50,2,node-trajectory attention,17647,0.0281357,0.3371,19.7
+rossler,100,0,ridge,10703,0.00575017,0.5706,0.0
+rossler,100,0,attention (AER),40700,0.0186124,0.3528,16.0
+rossler,100,0,node-trajectory attention,26947,0.0265626,0.1864,41.7
+rossler,100,1,ridge,10703,0.00557391,0.6305,0.0
+rossler,100,1,attention (AER),40700,0.00678569,0.6841,15.8
+rossler,100,1,node-trajectory attention,26947,0.0240156,0.5299,42.2
+rossler,100,2,ridge,10703,0.00681406,0.3092,0.0
+rossler,100,2,attention (AER),40700,0.00840269,0.6098,16.2
+rossler,100,2,node-trajectory attention,26947,0.0339661,0.3121,42.1
+rossler,200,0,ridge,41403,0.00361184,1.581,0.1
+rossler,200,0,attention (AER),161400,0.0103533,0.4399,21.9
+rossler,200,1,ridge,41403,0.00339487,1.955,0.1
+rossler,200,1,attention (AER),161400,0.00550874,0.682,19.8
+rossler,200,2,ridge,41403,0.00358443,1.765,0.1
+rossler,200,2,attention (AER),161400,0.0681846,0.3228,21.6
+mackey_glass,25,0,ridge,701,0.0524818,0.03569,0.0
+mackey_glass,25,0,attention (AER),1325,0.0520728,0.02469,9.7
+mackey_glass,25,0,node-trajectory attention,14756,0.0524096,0.07337,13.5
+mackey_glass,25,1,ridge,701,0.0500172,0.02899,0.0
+mackey_glass,25,1,attention (AER),1325,0.0500234,0.0178,10.9
+mackey_glass,25,1,node-trajectory attention,14756,0.0571622,0.01866,13.7
+mackey_glass,25,2,ridge,701,0.0495899,0.04963,0.0
+mackey_glass,25,2,attention (AER),1325,0.0497868,0.03458,11.4
+mackey_glass,25,2,node-trajectory attention,14756,0.0464413,0.06133,13.2
+mackey_glass,50,0,ridge,2651,0.0511511,0.0369,0.0
+mackey_glass,50,0,attention (AER),5150,0.0540095,0.02598,11.3
+mackey_glass,50,0,node-trajectory attention,17481,0.0691322,0.01127,21.4
+mackey_glass,50,1,ridge,2651,0.0483314,0.02159,0.0
+mackey_glass,50,1,attention (AER),5150,0.0508486,0.02838,11.5
+mackey_glass,50,1,node-trajectory attention,17481,0.0626247,0.02813,21.2
+mackey_glass,50,2,ridge,2651,0.0474761,0.05152,0.0
+mackey_glass,50,2,attention (AER),5150,0.04804,0.04189,11.7
+mackey_glass,50,2,node-trajectory attention,17481,0.0536427,0.05763,20.9
+mackey_glass,100,0,ridge,10301,0.050959,0.03561,0.0
+mackey_glass,100,0,attention (AER),20300,0.054878,0.03363,14.1
+mackey_glass,100,0,node-trajectory attention,26681,0.048804,0.06236,44.8
+mackey_glass,100,1,ridge,10301,0.0481313,0.01995,0.0
+mackey_glass,100,1,attention (AER),20300,0.0491963,0.01643,13.0
+mackey_glass,100,1,node-trajectory attention,26681,0.0528524,0.04215,45.3
+mackey_glass,100,2,ridge,10301,0.0469177,0.04954,0.0
+mackey_glass,100,2,attention (AER),20300,0.048779,0.02967,12.7
+mackey_glass,100,2,node-trajectory attention,26681,0.0491965,0.0418,45.0
+mackey_glass,200,0,ridge,40601,0.0503139,0.03776,0.0
+mackey_glass,200,0,attention (AER),80600,0.0536891,0.03303,16.5
+mackey_glass,200,1,ridge,40601,0.0479505,0.02013,0.0
+mackey_glass,200,1,attention (AER),80600,0.0493104,0.01858,14.8
+mackey_glass,200,2,ridge,40601,0.0468653,0.04989,0.0
+mackey_glass,200,2,attention (AER),80600,0.0496472,0.02752,15.6

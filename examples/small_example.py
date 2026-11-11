@@ -1,66 +1,44 @@
-from sklearn.linear_model import Ridge
-from AERes.dynamicalSystems import LorenzSimulator
-from AERes.reservoir import Reservoir
-from AERes.attention import AttentionTrainer
-
+"""Minimal end-to-end example: Lorenz data -> reservoir -> ridge vs. attention readout -> closed-loop forecast."""
 import matplotlib.pyplot as plt
-import numpy as np
+import torch
 
-#Simulate a Lorenz as a basic example for a chaotic dynamical system
-lorenz_simulator = LorenzSimulator(function_name='lorenz')
-X_train, Y_train, X_test, Y_test = lorenz_simulator.simulate_lorenz()
+from AERes import (AttentionTrainer, DynamicalSystemSimulator, Reservoir, RidgeTrainer,
+                   valid_prediction_time)
 
-# Create an instance of the Reservoir, feed it the input and run it
+torch.manual_seed(0)
+
+# Simulate the Lorenz system as a basic example of a chaotic dynamical system
+simulator = DynamicalSystemSimulator('lorenz', seed=0)
+X_train, Y_train, X_test, Y_test = simulator.simulate()
+dt = simulator.config["total_time"] / (simulator.config["num_points"] - 1)
+
+# Create the reservoir and drive it with the training inputs
 reservoir = Reservoir(X_train, number_nodes=50, input_dimension=X_train.shape[1], seed=1, standardize=True)
 
-# Train a simple Ridge Regression Model for comparison
-ridge_model = Ridge(alpha=1.0)
-ridge_model.fit(reservoir.states_stand, Y_train)
-ridge_predictions = ridge_model.predict(reservoir.states_stand)
+# Classic ridge readout and attention readout share the same interface
+ridge = RidgeTrainer(reservoir.states_stand, Y_train, alpha=1.0)
+ridge.train()
+attention = AttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
+attention.train(epochs=100)
 
-# Create a linear attention model
-trainer = AttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
-
-#Check the training and testing error for the ridge regression with the implemented attention model error function
-loss = trainer.MSELoss(ridge_predictions, Y_train)
-print(f'Ridge Regression MSE for training: {loss.item()}')
-trainer.train(epochs=100)
-
-#Run the reservoir for the testing inputs
+# Evaluate on the test set (re-using the training standardization)
 reservoir.run_given_inputs(X_test, calc_standardize=False)
+print(f"Ridge test MSE:     {ridge.evaluate(reservoir.states_stand, Y_test, verbose=False):.3e}")
+print(f"Attention test MSE: {attention.evaluate(reservoir.states_stand, Y_test, verbose=False):.3e}")
 
-#Predict the testing inputs with the ridge regression model
-ridge_predictions = ridge_model.predict(reservoir.states_stand)
+# Closed-loop forecast: synchronise on 250 test steps, then run autonomously
+warmup, horizon = 250, 500
+reservoir.reset_state()
+prediction = reservoir.forecast(attention, X_test[:warmup + 1], steps=horizon)
+truth = Y_test[warmup:warmup + horizon]
+vpt = valid_prediction_time(prediction, truth, dt=dt, lyapunov_exponent=0.906)
+print(f"Valid prediction time: {vpt:.2f} Lyapunov times")
 
-#Calculate ridge regression error
-loss = trainer.MSELoss(ridge_predictions, Y_test)
-print(f'Ridge Regression MSE for testing: {loss.item()}')
-
-#Calculate attention model error
-trainer.evaluate(reservoir.states_stand, Y_test)
-
-N=250
-for i in range(N):
-    reservoir.one_step(X_test[i], standardize=True)
-
-input = X_test[N]
-prediction = []
-for i in range(N):
-    reservoir.one_step(input, standardize=True)
-    pred_test = trainer.predict(reservoir.state_stand.reshape(1, -1)).T.squeeze()
-    prediction.append(pred_test)
-    input = pred_test
-
-plt.plot(np.array(prediction)[:,0])
-plt.plot(Y_test[N:,0])
+plt.plot(truth[:, 0], label="truth")
+plt.plot(prediction[:, 0], "--", label="attention forecast")
+plt.legend()
 plt.show()
 
-
-#Get the next step prediction for the testing set
-pred_test = trainer.predict(reservoir.states_stand)
-
-
-
-#We can save and load the trained model under a specified path
-#trainer.save_model('path_to_model.pt')
-#trainer.load_model('path_to_model.pt')
+# Save / load the trained model
+# attention.save_model('aeres_attention.pt')
+# attention.load_model('aeres_attention.pt')

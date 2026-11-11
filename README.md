@@ -1,179 +1,185 @@
-# AERes
+# AERes — Attention-Enhanced Reservoir Computing
 
-## Overview
-AERes is a Python package for experimenting with the attention-enhanced reservoir architecture using PyTorch. This library includes modules to simulate dynamical systems like the Lorenz attractor, implement reservoir computing models, and apply linear attention mechanisms.
-The corresponding paper can be found here:(https://arxiv.org/abs/2312.16503)
+[![tests](https://github.com/fekoester/AERes/actions/workflows/tests.yml/badge.svg)](https://github.com/fekoester/AERes/actions/workflows/tests.yml)
+[![arXiv](https://img.shields.io/badge/arXiv-2312.16503-b31b1b.svg)](https://arxiv.org/abs/2312.16503)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+AERes is a small PyTorch library for experimenting with the **attention-enhanced reservoir** architecture from
+[*Attention-Enhanced Reservoir Computing*](https://arxiv.org/abs/2312.16503). A classic reservoir uses a fixed linear readout.
+AERes replaces it with an attention readout whose weights change with the current reservoir state.
+
+What's included:
+
+- **`Reservoir`**: a seeded echo state network with an optional leak rate and standardization of its states.
+- **Readouts that share one interface** (`train`, `predict`, `evaluate`, `save_model`, `load_model`):
+  - `RidgeTrainer`: the classic closed-form ridge readout.
+  - `AttentionTrainer`: the linear or nonlinear attention readout from the paper.
+  - `NodeTrajectoryAttentionTrainer`: self-attention in which each reservoir node is a token holding its recent trajectory.
+- **Closed-loop forecasting** with `Reservoir.forecast(...)` and the **valid prediction time** metric.
+- **Benchmark systems**: Lorenz-63, coupled Lorenz, Lorenz-96, Rössler, Mackey-Glass and Kuramoto-Sivashinsky.
 
 ## Installation
-You can install AERes using pip:
 
 ```bash
 pip install git+https://github.com/fekoester/AERes.git
+# with the extra packages used by the examples (matplotlib, scikit-learn):
+pip install "AERes[examples] @ git+https://github.com/fekoester/AERes.git"
 ```
 
-## Quick Start
+AERes needs Python ≥ 3.10 and PyTorch ≥ 2.0. It uses a GPU automatically if one is available.
 
-This guide will help you get started with the `AERes` library, demonstrating how to simulate a dynamical system, utilize reservoir computing, and apply both Ridge Regression and a linear attention model for analysis.
-
-### Simulating a Dynamical System
-
-Simulate the standard Lorenz system, a well-known example of a chaotic dynamical system, to generate synthetic time-series data.
+## Quick start
 
 ```python
-from AERes.dynamicalSystems import LorenzSimulator
+import torch
+from AERes import (DynamicalSystemSimulator, Reservoir, RidgeTrainer, AttentionTrainer,
+                   valid_prediction_time)
 
-# Initialize the Lorenz simulator with the 'lorenz_coupled' configuration
-lorenz_simulator = LorenzSimulator(function_name='lorenz')
+torch.manual_seed(0)
 
-# Perform the simulation and retrieve the data split into training and testing sets
-X_train, Y_train, X_test, Y_test = lorenz_simulator.simulate_lorenz()
+# 1. Data: one-step-ahead prediction on the Lorenz attractor (Y[t] = X[t+1])
+sim = DynamicalSystemSimulator("lorenz", seed=0)
+X_train, Y_train, X_test, Y_test = sim.simulate()
+
+# 2. Reservoir: drive it with the training inputs and standardize the node states
+reservoir = Reservoir(X_train, number_nodes=50, input_dimension=3, seed=1, standardize=True)
+
+# 3. Readouts: ridge baseline vs. attention
+ridge = RidgeTrainer(reservoir.states_stand, Y_train, alpha=1.0)
+ridge.train()
+attention = AttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
+attention.train(epochs=100)
+
+# 4. Test: re-use the *training* standardization (calc_standardize=False) to avoid leakage
+reservoir.run_given_inputs(X_test, calc_standardize=False)
+ridge.evaluate(reservoir.states_stand, Y_test)
+attention.evaluate(reservoir.states_stand, Y_test)
 ```
 
-Here, `LorenzSimulator` is used to create a Lorenz system simulation with a specified system configuration, generating training and testing datasets.
+### Closed-loop forecasting
 
-### Simulating a Reservoir
-
-Process the simulated data through a reservoir computing system.
+With `forecast`, the reservoir first follows the real trajectory for a warm-up period. After that, its own predictions become its next inputs:
 
 ```python
-from AERes.reservoir import Reservoir
+reservoir.reset_state()
+prediction = reservoir.forecast(attention, X_test[:251], steps=500)  # prediction[0] ≈ Y_test[250]
 
-# Create an instance of the Reservoir with specified parameters
-reservoir = Reservoir(X_train, number_nodes=50, input_dimension=X_train.shape[1], seed=1, standardize=True)
+dt = sim.config["total_time"] / (sim.config["num_points"] - 1)
+vpt = valid_prediction_time(prediction, Y_test[250:750], dt=dt, lyapunov_exponent=0.906)
+print(f"Valid prediction time: {vpt:.2f} Lyapunov times")
 ```
 
-`Reservoir` processes the input data through a fixed, random recurrent structure of tanh functions. 
-The parameters such as `number_nodes`, `input_dimension`, and `standardize` control the complexity, dimensions, and state normalization, respectively.
+`forecast` accepts any of the readouts above, any fitted scikit-learn regressor, or a plain function.
+For `NodeTrajectoryAttentionTrainer` it keeps track of the rolling window of states.
 
-### Training a Ridge Regression Model
+### Node-trajectory attention
 
-Use a simple linear model, Ridge Regression, to establish a baseline for comparison with more complex models.
-
-```python
-from sklearn.linear_model import Ridge
-
-# Train a Ridge Regression model on the processed and standardized states
-ridge_model = Ridge(alpha=1.0)
-ridge_model.fit(reservoir.states_stand, Y_train)
-
-# Make predictions on the training data
-ridge_predictions = ridge_model.predict(reservoir.states_stand)
-```
-
-The Ridge Regression model helps in understanding the basic performance on the dataset, using `alpha` for regularization strength.
-
-### Implementing the Linear Attention Model
-
-Implement a linear attention model that dynamically focuses on the most important features of the input data.
+Each reservoir node becomes a token whose features are its last `window_size` states. Self-attention then learns
+how the node trajectories interact:
 
 ```python
-from AERes.attention import AttentionTrainer
+from AERes import NodeTrajectoryAttentionTrainer
 
-# Initialize the trainer for the Linear Attention model with the standardized reservoir states
-trainer = AttentionTrainer(reservoir.states_stand, Y_train, layer_type="linear")
-
-# Train the model over 100 epochs
+reservoir.reset_state()
+reservoir.run_given_inputs(X_train)  # training states (the quick start left test states in the reservoir)
+trainer = NodeTrajectoryAttentionTrainer(reservoir.states_stand, Y_train, window_size=32,
+                                         d_model=64, nhead=4, pooling="mean")
 trainer.train(epochs=100)
 ```
 
-`AttentionTrainer` sets up the model training process, handling both the training iterations and the data loading.
+The pooling options are `"mean"`, `"max"`, `"flatten"`, `"attention"` and `"cls"`.
 
-### Implementing Node-Trajectory Attention
-
-For a more faithful self-attention formulation, each reservoir node can be treated as a token whose features are its
-recent state trajectory. A rolling window over the reservoir state sequence creates tensors with shape
-`(samples, number_nodes, window_size)`, and self-attention learns interactions between node trajectories.
+### Benchmark systems
 
 ```python
-from AERes.attention import NodeTrajectoryAttentionTrainer
-
-window_size = 32
-trainer = NodeTrajectoryAttentionTrainer(
-    reservoir.states_stand,
-    Y_train,
-    window_size=window_size,
-    d_model=64,
-    nhead=4,
-    pooling="mean",
-)
-
-trainer.train(epochs=100)
+DynamicalSystemSimulator("rossler", seed=0).simulate()
+DynamicalSystemSimulator("mackey_glass", config={"mackey_glass_params": {"tau": 30, "beta": 0.2,
+                         "gamma": 0.1, "n": 10, "dt": 0.1, "x0": 1.2}}).simulate()
+DynamicalSystemSimulator("kuramoto_sivashinsky", seed=0).simulate()   # 64-dimensional
 ```
 
-The available pooling modes are `"mean"`, `"max"`, `"flatten"`, `"attention"`, and `"cls"`.
+| name | dim | notes |
+|---|---|---|
+| `lorenz` | 3 | Lorenz-63 |
+| `lorenz_coupled` | 6 | two Lorenz systems, the first modulates the second |
+| `lorenz96` | 36 | forcing `F = 8` |
+| `rossler` | 3 | `a = b = 0.2`, `c = 5.7` |
+| `mackey_glass` | 1 | delay `τ = 17` (RK4) |
+| `kuramoto_sivashinsky` | 64 | `L = 22`, ETDRK4 spectral solver |
 
-You can compare the classic ridge readout, the original AER attention layer, and node-trajectory attention across
-reservoir sizes with:
+All series get small measurement noise (`noise_level`, 0.01 by default) and are standardized. To make a run
+reproducible, pass `seed=`. Without it, NumPy's global random state is used, as in earlier versions.
+
+### Leaky reservoirs
+
+```python
+Reservoir(X_train, number_nodes=200, input_dimension=3, leakage=0.3)
+```
+
+The update rule is `x(t+1) = (1 − a)·x(t) + a·tanh(W x(t) + W_in u(t) + b)`. The default `leakage=1.0`
+is the non-leaky update the paper used.
+
+## Benchmark results
+
+How the readouts compare when they share the same reservoir. Lorenz-63 and Rössler, 3 seeds, 8 000 points (dt = 0.05).
+Ridge's α is selected on a validation split. AER trains for 150 epochs; node-trajectory attention (window 16) trains for 20.
+The valid prediction time (VPT) is the closed-loop forecast horizon before the normalized error exceeds 0.4, averaged over 5 start points.
+
+![benchmark](benchmarks/results/benchmark.png)
+
+| system | nodes | ridge NRMSE | AER NRMSE | ridge VPT (Λt) | AER VPT (Λt) |
+|---|---:|---:|---:|---:|---:|
+| Lorenz-63 | 25 | 0.056 | **0.012** | 0.47 | **1.53** |
+| Lorenz-63 | 50 | 0.017 | **0.007** | 1.08 | **2.34** |
+| Lorenz-63 | 100 | **0.006** | 0.009 | 1.53 | **1.73** |
+| Lorenz-63 | 200 | **0.003** | 0.018 | **2.87** | 1.66 |
+| Rössler | 25 | 0.055 | **0.017** | 0.02 | **0.23** |
+| Rössler | 50 | 0.028 | **0.011** | 0.05 | **0.32** |
+| Rössler | 100 | **0.006** | 0.011 | 0.50 | **0.55** |
+| Rössler | 200 | **0.004** | 0.028 | **1.77** | 0.48 |
+
+**Takeaway:** these runs agree with the paper. With **small reservoirs (25–50 nodes)**, attention reduces the one-step error 2–5×
+and forecasts stay valid 2–10× longer. With 200 nodes, ridge wins: AER then has 80k+ trainable weights,
+and with this training budget it doesn't converge as well. Node-trajectory attention trails AER at these training budgets.
+For Mackey-Glass, all readouts reach the noise floor (NRMSE ≈ 0.05), so it doesn't separate them.
+Full results with standard deviations are in [`benchmarks/results/results.md`](benchmarks/results/results.md).
+
+To reproduce:
 
 ```bash
-python examples/compare_reservoir_attention.py
+python benchmarks/run_benchmark.py          # ~30 min on 2 CPU cores
+python benchmarks/plot_benchmark.py benchmarks/results/results.csv lorenz,rossler
 ```
 
-This writes `mse_over_reservoir_size.png` and `mse_over_parameter_count.png` to
-`plots/reservoir_attention_comparison/`.
+## Examples
 
-### Evaluating the Model
+| script | what it does |
+|---|---|
+| `examples/small_example.py` | end-to-end: ridge vs. attention, closed-loop forecast plot |
+| `examples/forecasting_benchmark.py` | NRMSE and valid prediction time for every built-in system |
+| `examples/compare_reservoir_attention.py` | ridge vs. AER vs. node-trajectory attention across reservoir sizes (writes plots) |
+| `examples/node_trajectory_attention_example.py` | minimal node-trajectory attention run |
 
-Compare the performance of the Ridge Regression and Linear Attention models to understand their effectiveness.
+## Development
 
-```python
-# Calculate the Mean Squared Error (MSE) for the Ridge Regression model
-ridge_loss = trainer.MSELoss(ridge_predictions, Y_train)
-print(f'Ridge Regression MSE for training: {ridge_loss.item()}')
-
-# We have to run the reservoir again, this time with the test inputs
-reservoir.run_given_inputs(X_test)
-
-# Evaluate the trained attention model on the testing data
-trainer.evaluate(reservoir.states_stand, Y_test)
+```bash
+pip install -e ".[dev]"
+pytest
 ```
 
-The evaluation phase involves calculating the Mean Squared Error (MSE) for both models to quantify their accuracy.
+## Citation
 
-We can also make predictions on some given input and plot its outcome.
+If you use AERes in your research, please cite:
 
-```python
-import matplotlib.pyplot as plt
-#Get the next step prediction for the testing set and plot it
-pred_test = trainer.predict(reservoir.states_stand)
-plt.plot(Y_test[:,0])
-plt.plot(pred_test[:,0])
-plt.show()
+```bibtex
+@article{koester2023attention,
+  title   = {Attention-Enhanced Reservoir Computing},
+  author  = {K{\"o}ster, Felix and Kanno, Kazutaka and Ohkubo, Jun and Uchida, Atsushi},
+  journal = {arXiv preprint arXiv:2312.16503},
+  year    = {2023}
+}
 ```
 
-To perform a closed-loop configuration, we can use the one_step function of the reservoir system.
+## License
 
-```python
-#First run a few steps to converge the reservoir on the trajectory
-N = 250
-for i in range(N):
-    reservoir.one_step(X_test[i], standardize=True)
-
-#Then start the system and let it run autonomously
-input = X_test[N]
-prediction = []
-for i in range(N):
-    reservoir.one_step(input, standardize=True)
-    #We have to reshape the reservoir state to the right tensor dimensions. Afterwards, we have to transpose and squeeze it
-    pred_test = trainer.predict(reservoir.state_stand.reshape(1, -1)).T.squeeze() 
-    prediction.append(pred_test)
-    input = pred_test
-
-plt.plot(np.array(prediction)[:,0])
-plt.plot(Y_test[N:,0])
-plt.show()
-```
-
-### Save the Model
-
-To save time and computation, we can save the parameters of our model and load them for later use.
-
-```python
-#We can save and load the trained model under a specified path
-trainer.save_model('path_to_model.pt')
-trainer.load_model('path_to_model.pt')
-```
-
-## Higher Complexity yields more performance improvement
-
-The above example showcases the usage of the library. The classic Lorenz system is a very easy task, therefore the performance difference between the classic ridge regression approach and the linear attention is not very big. Using systems with higher complexity or more diverse time series data will enable the advantages of the linear attention approach. With time I will more examples here to show that.
+MIT (see [LICENSE](LICENSE)).

@@ -15,3 +15,12 @@ Modules Documentation
    :members:
    :undoc-members:
    :show-inheritance:
+.. automodule:: AERes.readout
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: AERes.metrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
