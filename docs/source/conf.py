@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath('../../AERes/'))
 project = 'AERes'
 copyright = '2024, Felix Köster'
 author = 'Felix Köster'
-release = '0.1'
+release = '0.2.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

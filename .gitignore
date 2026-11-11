@@ -135,3 +135,7 @@ venv.bak/
 *.tmp
 *.temp
 plots/
+
+# Saved models
+*.pt
+*.npz

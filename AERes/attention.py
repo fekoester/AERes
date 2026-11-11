@@ -3,7 +3,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from torch.cuda.amp import autocast, GradScaler
+
+
+def _resolve_device(device=None):
+    if device is None:
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(device)
+
+
+def _as_2d_float32(array):
+    array = np.asarray(array, dtype=np.float32)
+    return array.reshape(-1, 1) if array.ndim == 1 else array
 
 
 def create_node_trajectory_windows(states, window_size):
@@ -15,7 +25,8 @@ def create_node_trajectory_windows(states, window_size):
     - window_size (int): Number of recent time steps included in each node trajectory.
 
     Returns:
-    - numpy.ndarray: X with shape (samples, number_nodes, window_size).
+    - numpy.ndarray: X with shape (samples, number_nodes, window_size), where
+      samples = time_steps - window_size + 1.
     """
     states = np.asarray(states, dtype=np.float32)
     if states.ndim != 2:
@@ -25,21 +36,16 @@ def create_node_trajectory_windows(states, window_size):
     if len(states) < window_size:
         raise ValueError("window_size cannot be larger than the number of state time steps.")
 
-    trajectory_windows = []
-    for end_idx in range(window_size - 1, len(states)):
-        window = states[end_idx - window_size + 1:end_idx + 1]
-        trajectory_windows.append(window.T)
-
-    return np.asarray(trajectory_windows, dtype=np.float32)
+    # Strided view: (samples, nodes, window) without a Python loop, then one contiguous copy.
+    windows = np.lib.stride_tricks.sliding_window_view(states, window_size, axis=0)
+    return np.ascontiguousarray(windows)
 
 
 def create_node_trajectory_dataset(states, targets, window_size):
     """
     Converts reservoir states and aligned targets into node-trajectory training samples.
     """
-    targets = np.asarray(targets, dtype=np.float32)
-    if targets.ndim == 1:
-        targets = targets.reshape(-1, 1)
+    targets = _as_2d_float32(targets)
     if len(states) != len(targets):
         raise ValueError("states and targets must have the same number of time steps.")
 
@@ -70,8 +76,7 @@ class LinearAttention(nn.Module):
         - device (str or torch.device): The device tensors will be allocated on. If None, uses CUDA if available.
         """
         super(LinearAttention, self).__init__()
-        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.device = torch.device(device)
+        self.device = _resolve_device(device)
         self.input_dim = input_dim
         self.target_dim = target_dim
         
@@ -112,7 +117,7 @@ class DeepLinearAttention(nn.Module):
         - device (str or torch.device): The device tensors will be allocated on. If None, uses CUDA if available.
         """
         super(DeepLinearAttention, self).__init__()
-        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = _resolve_device(device)
         self.input_dim = input_dim
         self.target_dim = target_dim
 
@@ -174,7 +179,7 @@ class NodeTrajectoryAttention(nn.Module):
         if pooling not in valid_pooling:
             raise ValueError(f"pooling must be one of {sorted(valid_pooling)}.")
 
-        self.device = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = _resolve_device(device)
         self.number_nodes = number_nodes
         self.window_size = window_size
         self.target_dim = target_dim
@@ -250,168 +255,155 @@ class NodeTrajectoryAttention(nn.Module):
 
         return self.readout(pooled)
 
-class AttentionTrainer:
-    """
-    Trainer class for the LinearAttention model, encapsulating training and evaluation logic,
-    including automatic DataLoader creation from provided datasets.
-    """
-    def __init__(self, X, Y, batch_size=64, shuffle=True, learning_rate=0.001, use_gpu=True, layer_type="linear"):
-        """
-        Initializes the LinearAttentionTrainer with data and constructs the DataLoader.
+class _TorchTrainer:
+    """Shared training / evaluation / persistence logic for the PyTorch readouts."""
 
-        Args:
-        - X_train (numpy.ndarray): Input feature array for training.
-        - Y_train (numpy.ndarray): Output target array for training.
-        - batch_size (int): Batch size for the DataLoader.
-        - shuffle (bool): Whether to shuffle the data before training.
-        - learning_rate (float): Learning rate for the optimizer.
-        - device (str or torch.device): The device computations will run on. If None, uses CUDA if available.
-        """
-        device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
-        self.device = torch.device(device)
-        if layer_type == "linear":
-            self.model = LinearAttention(X.shape[1], Y.shape[1], device=self.device)
-        if layer_type == "nonlinear":
-            self.model = DeepLinearAttention(X.shape[1], Y.shape[1], device=self.device)
-        self.learning_rate = learning_rate
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+    def _setup(self, use_gpu, batch_size, learning_rate):
+        self.device = torch.device("cuda" if use_gpu and torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
-        self.train_loader = self.create_dataloader(X, Y, batch_size, shuffle)
+        self.learning_rate = learning_rate
         self.mse_loss = nn.MSELoss()
-        #self.writer = SummaryWriter(log_dir='./logs')  # Initialize the SummaryWriter
+        self.history = []
+
+    def _init_optimizer(self):
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def MSELoss(self, prediction, target):
-        """
-        Computes the mean squared error between the predicted and target values.
-
-        Args:
-            prediction (torch.Tensor or numpy.ndarray): Predicted values from the model.
-            target (torch.Tensor or numpy.ndarray): Actual target values to compare against.
-
-        Returns:
-            torch.Tensor: The computed mean squared error loss.
-        """
-        # Convert numpy arrays to torch tensors
+        """Mean squared error between prediction and target (numpy arrays or tensors)."""
         if not isinstance(prediction, torch.Tensor):
-            prediction = torch.tensor(prediction, dtype=torch.float32)
-
+            prediction = torch.tensor(np.asarray(prediction), dtype=torch.float32)
         if not isinstance(target, torch.Tensor):
-            target = torch.tensor(target, dtype=torch.float32)
+            target = torch.tensor(np.asarray(target), dtype=torch.float32)
         return self.mse_loss(prediction, target)
-    
+
     def create_dataloader(self, X, Y, batch_size, shuffle=True):
+        """Creates a DataLoader from numpy arrays."""
+        dataset = TensorDataset(torch.as_tensor(np.asarray(X, dtype=np.float32)),
+                                torch.as_tensor(_as_2d_float32(Y)))
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=0,
+                          pin_memory=self.device.type == "cuda")
+
+    def train(self, epochs=100, verbose=True):
         """
-        Helper method to create a DataLoader from numpy arrays.
+        Trains the model.
 
         Args:
-        - X (numpy.ndarray): Input feature array.
-        - Y (numpy.ndarray): Output target array.
-        - batch_size (int): Batch size for the DataLoader.
-        - shuffle (bool): Whether to shuffle the data.
+            epochs (int): Number of epochs.
+            verbose (bool): Print the mean loss after every epoch.
 
         Returns:
-        - DataLoader: Configured DataLoader ready for model training or evaluation.
+            list[float]: Mean training loss per epoch (also appended to ``self.history``).
         """
-        dataset = TensorDataset(torch.tensor(X, dtype=torch.float32),
-                                torch.tensor(Y, dtype=torch.float32))
-        num_workers = 8 if torch.cuda.is_available() else 0
-        pin_memory = torch.cuda.is_available()
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,num_workers=0, pin_memory=pin_memory)
-
-    def train(self, epochs=100):
-        """
-        Trains the model for a specified number of epochs.
-
-        Args:
-            epochs (int): The number of epochs to train the model.
-        """
-        if self.device.type == "cuda":
-            scaler = GradScaler()
-
+        use_amp = self.device.type == "cuda"
+        scaler = torch.amp.GradScaler("cuda") if use_amp else None
+        losses = []
         for epoch in range(epochs):
             self.model.train()
             epoch_loss = 0.0
-            for batch_idx, (X_batch, Y_batch) in enumerate(self.train_loader):
-                X_batch, Y_batch = X_batch.to(self.device), Y_batch.to(self.device)
-                self.optimizer.zero_grad()
-
-                if self.device.type == "cuda":
-                    with autocast():
-                        predictions = self.model(X_batch)
-                        loss = self.MSELoss(predictions, Y_batch)
+            for X_batch, Y_batch in self.train_loader:
+                X_batch = X_batch.to(self.device, non_blocking=True)
+                Y_batch = Y_batch.to(self.device, non_blocking=True)
+                self.optimizer.zero_grad(set_to_none=True)
+                if use_amp:
+                    with torch.amp.autocast("cuda"):
+                        loss = self.mse_loss(self.model(X_batch), Y_batch)
                     scaler.scale(loss).backward()
                     scaler.step(self.optimizer)
                     scaler.update()
                 else:
-                    predictions = self.model(X_batch)
-                    loss = self.MSELoss(predictions, Y_batch)
+                    loss = self.mse_loss(self.model(X_batch), Y_batch)
                     loss.backward()
                     self.optimizer.step()
-                
-
                 epoch_loss += loss.item()
 
-            print(f"Epoch {epoch + 1}/{epochs}, Loss: {epoch_loss / len(self.train_loader):.4f}")
+            mean_loss = epoch_loss / len(self.train_loader)
+            losses.append(mean_loss)
+            if verbose:
+                print(f"Epoch {epoch + 1}/{epochs}, Loss: {mean_loss:.4f}")
+        self.history.extend(losses)
+        return losses
 
+    def _prepare_inputs(self, X, Y=None, window_size=None):
+        return X, Y
 
-
-    def evaluate(self, X, Y):
+    def evaluate(self, X, Y, verbose=True, **kwargs):
         """
-        Evaluates the model using a provided DataLoader for test data.
+        Computes the test MSE over all samples.
 
-        Args:
-        - test_loader (DataLoader): DataLoader for test data.
+        Returns:
+            float: Mean squared error.
         """
-        self.test_loader = self.create_dataloader(X, Y, self.batch_size)
+        X, Y = self._prepare_inputs(X, Y, **kwargs)
+        loader = self.create_dataloader(X, Y, self.batch_size, shuffle=False)
         self.model.eval()
-        self.model.to(self.device)
-        total_loss = 0.0
+        total_loss, count = 0.0, 0
         with torch.no_grad():
-            for X_batch, Y_batch in self.test_loader:
+            for X_batch, Y_batch in loader:
                 X_batch, Y_batch = X_batch.to(self.device), Y_batch.to(self.device)
-                outputs = self.model(X_batch)
-                loss = self.MSELoss(outputs, Y_batch)
-                total_loss += loss.item()
+                total_loss += self.mse_loss(self.model(X_batch), Y_batch).item() * len(X_batch)
+                count += len(X_batch)
+        loss = total_loss / count
+        if verbose:
+            print(f'Test Loss: {loss:.4f}')
+        return loss
 
-            print(f'Test Loss: {total_loss/len(self.test_loader):.4f}')
+    def predict(self, input, **kwargs):
+        """Predicts outputs for the given input array. Returns a numpy array."""
+        input, _ = self._prepare_inputs(input, None, **kwargs)
+        self.model.eval()
+        input_tensor = torch.as_tensor(np.asarray(input, dtype=np.float32), device=self.device)
+        with torch.no_grad():
+            return self.model(input_tensor).cpu().numpy()
 
     def print_memory_summary(self):
-        """
-        Prints a summary of memory allocation and usage by the current model on the GPU.
-        """
+        """Prints a summary of GPU memory allocation."""
         print(torch.cuda.memory_summary(device=None, abbreviated=False))
 
-    def predict(self, input):
-        """
-        Takes an input and makes a prediction on it.
-        """
-        self.model.to(self.device)
-        input_tensor = torch.tensor(input, dtype=torch.float32).to(self.device)
-        return self.model(input_tensor).detach().cpu().numpy()
-
     def save_model(self, filepath):
-        """
-        Saves the model parameters to the specified file.
-        
-        Args:
-        - filepath (str): The path to the file where the model state will be saved.
-        """
+        """Saves the model parameters to ``filepath``."""
         torch.save(self.model.state_dict(), filepath)
         print(f"Model saved to {filepath}")
 
     def load_model(self, filepath):
-        """
-        Loads model parameters from the specified file.
-        
-        Args:
-        - filepath (str): The path to the file from which to load the model state.
-        """
-        model_state = torch.load(filepath, map_location=self.device)
+        """Loads model parameters from ``filepath``."""
+        model_state = torch.load(filepath, map_location=self.device, weights_only=True)
         self.model.load_state_dict(model_state)
         print(f"Model loaded from {filepath}")
 
 
-class NodeTrajectoryAttentionTrainer:
+class AttentionTrainer(_TorchTrainer):
+    """
+    Trainer for the attention-enhanced reservoir readout (``LinearAttention`` or ``DeepLinearAttention``).
+    """
+    LAYER_TYPES = {"linear": LinearAttention, "nonlinear": DeepLinearAttention}
+
+    def __init__(self, X, Y, batch_size=64, shuffle=True, learning_rate=0.001, use_gpu=True, layer_type="linear"):
+        """
+        Args:
+        - X (numpy.ndarray): Reservoir states, shape (samples, nodes).
+        - Y (numpy.ndarray): Targets, shape (samples, targets) or (samples,).
+        - batch_size (int): Batch size.
+        - shuffle (bool): Shuffle training data every epoch.
+        - learning_rate (float): Adam learning rate.
+        - use_gpu (bool): Use CUDA if available.
+        - layer_type (str): "linear" or "nonlinear".
+        """
+        if layer_type not in self.LAYER_TYPES:
+            raise ValueError(f"layer_type must be one of {sorted(self.LAYER_TYPES)}, got {layer_type!r}.")
+        self._setup(use_gpu, batch_size, learning_rate)
+        Y = _as_2d_float32(Y)
+        self.model = self.LAYER_TYPES[layer_type](X.shape[1], Y.shape[1], device=self.device)
+        self._init_optimizer()
+        self.train_loader = self.create_dataloader(X, Y, batch_size, shuffle)
+
+    def _prepare_inputs(self, X, Y=None, **kwargs):
+        X = np.asarray(X)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+        return X, Y
+
+
+class NodeTrajectoryAttentionTrainer(_TorchTrainer):
     """
     Trainer for self-attention over reservoir node trajectories.
     """
@@ -426,10 +418,8 @@ class NodeTrajectoryAttentionTrainer:
         - window_size (int): Required when X contains raw reservoir states.
         - pooling (str): One of "mean", "max", "flatten", "attention", or "cls".
         """
-        device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
-        self.device = torch.device(device)
-        self.batch_size = batch_size
-
+        self._setup(use_gpu, batch_size, learning_rate)
+        X = np.asarray(X)
         if X.ndim == 2:
             if window_size is None:
                 raise ValueError("window_size is required when X contains raw reservoir states.")
@@ -439,8 +429,7 @@ class NodeTrajectoryAttentionTrainer:
                 window_size = X.shape[2]
         else:
             raise ValueError("X must have shape (time, nodes) or (samples, nodes, window_size).")
-        if Y.ndim == 1:
-            Y = Y.reshape(-1, 1)
+        Y = _as_2d_float32(Y)
 
         self.window_size = window_size
         self.train_loader = self.create_dataloader(X, Y, batch_size, shuffle)
@@ -456,90 +445,19 @@ class NodeTrajectoryAttentionTrainer:
             pooling=pooling,
             device=self.device,
         )
-        self.learning_rate = learning_rate
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        self.mse_loss = nn.MSELoss()
+        self._init_optimizer()
 
-    def MSELoss(self, prediction, target):
-        if not isinstance(prediction, torch.Tensor):
-            prediction = torch.tensor(prediction, dtype=torch.float32)
-        if not isinstance(target, torch.Tensor):
-            target = torch.tensor(target, dtype=torch.float32)
-        return self.mse_loss(prediction, target)
-
-    def create_dataloader(self, X, Y, batch_size, shuffle=True):
-        dataset = TensorDataset(
-            torch.tensor(X, dtype=torch.float32),
-            torch.tensor(Y, dtype=torch.float32),
-        )
-        pin_memory = self.device.type == "cuda"
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=0, pin_memory=pin_memory)
-
-    def train(self, epochs=100):
-        if self.device.type == "cuda":
-            scaler = GradScaler()
-
-        for epoch in range(epochs):
-            self.model.train()
-            epoch_loss = 0.0
-            for X_batch, Y_batch in self.train_loader:
-                X_batch, Y_batch = X_batch.to(self.device), Y_batch.to(self.device)
-                self.optimizer.zero_grad()
-
-                if self.device.type == "cuda":
-                    with autocast():
-                        predictions = self.model(X_batch)
-                        loss = self.MSELoss(predictions, Y_batch)
-                    scaler.scale(loss).backward()
-                    scaler.step(self.optimizer)
-                    scaler.update()
-                else:
-                    predictions = self.model(X_batch)
-                    loss = self.MSELoss(predictions, Y_batch)
-                    loss.backward()
-                    self.optimizer.step()
-
-                epoch_loss += loss.item()
-
-            print(f"Epoch {epoch + 1}/{epochs}, Loss: {epoch_loss / len(self.train_loader):.4f}")
-
-    def evaluate(self, X, Y, window_size=None):
+    def _prepare_inputs(self, X, Y=None, window_size=None):
+        """
+        Accepts raw states (time, nodes), a single trajectory (nodes, window_size) or
+        trajectories (samples, nodes, window_size). Raw states are windowed and targets are aligned.
+        """
+        X = np.asarray(X)
+        window_size = window_size or self.window_size
         if X.ndim == 2:
-            if window_size is None:
-                window_size = self.window_size
-            X, Y = create_node_trajectory_dataset(X, Y, window_size)
-
-        test_loader = self.create_dataloader(X, Y, self.batch_size, shuffle=False)
-        self.model.eval()
-        total_loss = 0.0
-        with torch.no_grad():
-            for X_batch, Y_batch in test_loader:
-                X_batch, Y_batch = X_batch.to(self.device), Y_batch.to(self.device)
-                outputs = self.model(X_batch)
-                loss = self.MSELoss(outputs, Y_batch)
-                total_loss += loss.item()
-
-        print(f'Test Loss: {total_loss/len(test_loader):.4f}')
-
-    def predict(self, input, window_size=None):
-        if input.ndim == 2:
-            if input.shape[0] == self.model.number_nodes and input.shape[1] == self.window_size:
-                input = input.reshape(1, self.model.number_nodes, self.window_size)
-            else:
-                if window_size is None:
-                    window_size = self.window_size
-                input = create_node_trajectory_windows(input, window_size)
-
-        self.model.eval()
-        input_tensor = torch.tensor(input, dtype=torch.float32).to(self.device)
-        with torch.no_grad():
-            return self.model(input_tensor).detach().cpu().numpy()
-
-    def save_model(self, filepath):
-        torch.save(self.model.state_dict(), filepath)
-        print(f"Model saved to {filepath}")
-
-    def load_model(self, filepath):
-        model_state = torch.load(filepath, map_location=self.device)
-        self.model.load_state_dict(model_state)
-        print(f"Model loaded from {filepath}")
+            if Y is None and X.shape == (self.model.number_nodes, self.window_size):
+                return X.reshape(1, *X.shape), None
+            if Y is not None:
+                return create_node_trajectory_dataset(X, Y, window_size)
+            return create_node_trajectory_windows(X, window_size), None
+        return X, Y

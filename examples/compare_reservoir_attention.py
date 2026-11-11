@@ -42,8 +42,8 @@ def make_dataset(args):
         "num_points": args.num_points,
         "noise_level": args.noise_level,
     }
-    simulator = LorenzSimulator(function_name=args.system, config=config)
-    return simulator.simulate_lorenz()
+    simulator = LorenzSimulator(function_name=args.system, config=config, seed=args.seed)
+    return simulator.simulate()
 
 
 def train_classic_reservoir(reservoir, y_train, x_test, y_test, alpha):
@@ -156,7 +156,7 @@ def main():
     )
     parser.add_argument("--reservoir-sizes", default="16,32,64,128", type=parse_sizes)
     parser.add_argument("--output-dir", default="plots/reservoir_attention_comparison")
-    parser.add_argument("--system", default="lorenz", choices=["lorenz", "lorenz_coupled", "lorenz96"])
+    parser.add_argument("--system", default="lorenz", choices=list(LorenzSimulator.SYSTEMS))
     parser.add_argument("--num-points", type=int, default=2000)
     parser.add_argument("--total-time", type=float, default=150)
     parser.add_argument("--transient-time", type=float, default=10)
