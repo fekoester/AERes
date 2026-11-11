@@ -119,6 +119,38 @@ Reservoir(X_train, number_nodes=200, input_dimension=3, leakage=0.3)
 The update rule is `x(t+1) = (1 − a)·x(t) + a·tanh(W x(t) + W_in u(t) + b)`. The default `leakage=1.0`
 is the non-leaky update the paper used.
 
+## Benchmark results
+
+How the readouts compare when they share the same reservoir. Lorenz-63 and Rössler, 3 seeds, 8 000 points (dt = 0.05).
+Ridge's α is selected on a validation split. AER trains for 150 epochs; node-trajectory attention (window 16) trains for 20.
+The valid prediction time (VPT) is the closed-loop forecast horizon before the normalized error exceeds 0.4, averaged over 5 start points.
+
+![benchmark](benchmarks/results/benchmark.png)
+
+| system | nodes | ridge NRMSE | AER NRMSE | ridge VPT (Λt) | AER VPT (Λt) |
+|---|---:|---:|---:|---:|---:|
+| Lorenz-63 | 25 | 0.056 | **0.012** | 0.47 | **1.53** |
+| Lorenz-63 | 50 | 0.017 | **0.007** | 1.08 | **2.34** |
+| Lorenz-63 | 100 | **0.006** | 0.009 | 1.53 | **1.73** |
+| Lorenz-63 | 200 | **0.003** | 0.018 | **2.87** | 1.66 |
+| Rössler | 25 | 0.055 | **0.017** | 0.02 | **0.23** |
+| Rössler | 50 | 0.028 | **0.011** | 0.05 | **0.32** |
+| Rössler | 100 | **0.006** | 0.011 | 0.50 | **0.55** |
+| Rössler | 200 | **0.004** | 0.028 | **1.77** | 0.48 |
+
+**Takeaway:** these runs agree with the paper. With **small reservoirs (25–50 nodes)**, attention reduces the one-step error 2–5×
+and forecasts stay valid 2–10× longer. With 200 nodes, ridge wins: AER then has 80k+ trainable weights,
+and with this training budget it doesn't converge as well. Node-trajectory attention trails AER at these training budgets.
+For Mackey-Glass, all readouts reach the noise floor (NRMSE ≈ 0.05), so it doesn't separate them.
+Full results with standard deviations are in [`benchmarks/results/results.md`](benchmarks/results/results.md).
+
+To reproduce:
+
+```bash
+python benchmarks/run_benchmark.py          # ~30 min on 2 CPU cores
+python benchmarks/plot_benchmark.py benchmarks/results/results.csv lorenz,rossler
+```
+
 ## Examples
 
 | script | what it does |

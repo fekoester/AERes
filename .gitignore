@@ -139,3 +139,5 @@ plots/
 # Saved models
 *.pt
 *.npz
+
+!benchmarks/results/*.csv
